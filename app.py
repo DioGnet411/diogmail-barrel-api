@@ -10,26 +10,26 @@ import numpy as np
 from fastapi import FastAPI
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
+import zipfile
 
 app = FastAPI()
 
-MODEL_ZIP_URL = "https://drive.google.com/uc?id=1AkqV0IyHuXghzFXwGX1nWuSWlZiTLT0H"
-"
+MODEL_ZIP_URL = "https://drive.google.com/uc?id=1TTMdcG0Lo7yPA2OJyq-jqczSaUcgznxr"
+
+# Ensure model directory exists
+os.makedirs("model", exist_ok=True)
 
 # -------------------------------------------------------
 # 1. Download and extract model files from Google Drive
 # -------------------------------------------------------
-import zipfile
-
 if not os.path.exists("model/embedder"):
     print("⏳ Downloading DioGMail Barrel models from Google Drive...")
     gdown.download(MODEL_ZIP_URL, "models.zip", quiet=False)
 
     print("📦 Extracting models.zip...")
-    with zipfile.ZipFile("models.zip", 'r') as zip_ref:
+    with zipfile.ZipFile("models.zip", "r") as zip_ref:
         zip_ref.extractall("model/")
     print("✅ Models extracted.")
-
 
 # -------------------------------------------
 # 2. Load models
@@ -62,7 +62,7 @@ class Barrel(torch.nn.Module):
         g_norm = (g - self.mean_global) / (self.std_global + 1e-9)
         return self.out(g_norm).squeeze(1)
 
-sample_dim = logreg.coef_.shape[1]  # should be 384 for MiniLM
+sample_dim = logreg.coef_.shape[1]  # expected 384 dim
 
 barrel = Barrel(sample_dim)
 barrel.load_state_dict(torch.load("model/barrel_model.pt", map_location="cpu"))
@@ -76,7 +76,7 @@ with torch.no_grad():
     barrel.std_global = gvals.std()
 
 # -------------------------------------------
-# 3. Email Body Input Format
+# 3. Email Input Format
 # -------------------------------------------
 class Email(BaseModel):
     subject: str
@@ -93,16 +93,16 @@ def scan_email(e: Email):
     text = e.subject + " [SEP] " + e.body
     emb = embedder.encode([text])
 
-    # Layer 1 probability
+    # Layer 1 prob
     p_lr = float(logreg.predict_proba(emb)[0][1])
 
-    # Barrel probability
+    # Barrel prob
     with torch.no_grad():
         x_t = torch.tensor(emb, dtype=torch.float32)
         logits = barrel(x_t)
         p_bar = float(torch.sigmoid(logits))
 
-    # Fusion
+    # Fusion score
     fused = (p_lr + p_bar) / 2
     risk = int((1 - fused) * 100)
     verdict = "legit" if fused >= BEST_TH else "scam"
@@ -114,3 +114,4 @@ def scan_email(e: Email):
         "p_barrel": round(p_bar, 3),
         "fused_p_legit": round(fused, 3)
     }
+
