@@ -13,17 +13,23 @@ from sentence_transformers import SentenceTransformer
 
 app = FastAPI()
 
-MODEL_ZIP_URL = "https://drive.google.com/file/d/1AkqV0IyHuXghzFXwGX1nWuSWlZiTLT0H"
+MODEL_ZIP_URL = "https://drive.google.com/uc?id=1AkqV0IyHuXghzFXwGX1nWuSWlZiTLT0H"
+"
 
-# -------------------------------------------
-# 1. Download and extract model files
-# -------------------------------------------
+# -------------------------------------------------------
+# 1. Download and extract model files from Google Drive
+# -------------------------------------------------------
+import zipfile
+
 if not os.path.exists("model/embedder"):
-    os.makedirs("model", exist_ok=True)
-    print("Downloading DioGMail Barrel weights...")
+    print("⏳ Downloading DioGMail Barrel models from Google Drive...")
     gdown.download(MODEL_ZIP_URL, "models.zip", quiet=False)
-    os.system("unzip -o models.zip -d model/")
-    print("Model extracted.")
+
+    print("📦 Extracting models.zip...")
+    with zipfile.ZipFile("models.zip", 'r') as zip_ref:
+        zip_ref.extractall("model/")
+    print("✅ Models extracted.")
+
 
 # -------------------------------------------
 # 2. Load models
